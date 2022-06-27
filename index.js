@@ -18,20 +18,18 @@ mongoClient.connect().then(() => {
 });
 
 
-server.post('/participants',(request,response) => {
+server.post('/participants',async (request,response) => {
     
     const userSchema = joi.object({
         name: joi.string().required(),
     });
 
     const valid= userSchema.validate(request.body);
-    console.log(valid);
     if (!valid.error){
-        console.log("ok");
         const user = request.body.name;
 
         let teste = true;
-        db.collection("users").find().toArray().then(users => {
+        await db.collection("users").find().toArray().then(users => {
             for (let value of users){
                 {if (value === user){
                     teste = false}
@@ -39,8 +37,8 @@ server.post('/participants',(request,response) => {
             }
         });
         if (teste){
-            db.collection("users").insertOne({name:user,lastStatus: Date.now()});
-            db.collection("messages").insertOne({from: user, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('LTS')});
+            await db.collection("users").insertOne({name:user,lastStatus: Date.now()});
+            await db.collection("messages").insertOne({from: user, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('HH:mm:ss')});
             response.status(201).send();
         } else{
             response.status(409).send();
@@ -48,7 +46,6 @@ server.post('/participants',(request,response) => {
         }
     }else {
         response.status(422).send();
-        console.log("erro!");
     }
 
     
@@ -59,23 +56,23 @@ server.get('/participants',(request,response) => {
 		response.send(users)});
 }); //ta ok
 
-server.post('/messages',(request,response) => {
+server.post('/messages', async (request,response) => {
     
-    const userSchema = joi.object({
+    const messageSchema = joi.object({
         to: joi.string().required(),
+        type: joi.string().required(),
         text: joi.string().required(),
 
     });
 
-    const validate = userSchema.validate(request.body);
-
+    const validate = messageSchema.validate(request.body);
     let testeType = false;
     if (request.body.type === 'message' || request.body.type ==='private_message'){
         testeType = true;
     }
 
     let testeUser = true;
-        db.collection("users").find().toArray().then(users => {
+        await db.collection("users").find().toArray().then(users => {
             for (let value of users){
                 {if (value === request.query.User){
                     teste = false}
@@ -84,28 +81,26 @@ server.post('/messages',(request,response) => {
         });
 
     if (!validate.error && testeType && testeUser){
-        const from = request.query.User;
+        const from = request.headers.user;
         const to = request.body.to;
         const text = request.body.text;
         const type = request.body.type;
-        db.collection("messages").insertOne({from, to, text, type, time: dayjs().format(LTS)});
+        await db.collection("messages").insertOne({from, to, text, type, time: dayjs().format('HH:mm:ss')});
         response.status(201).send();
-        console.log("mensagem adicionada")
     } else{
         response.status(422).send();
-        console.log('erro aqui');
     }    
     
 });
 
-server.get('/messages',(request,response) => {
+server.get('/messages', async (request,response) => {
     const limit = parseInt(request.query.limit);
     let listMessages = [];
-    db.collection("messages").find().toArray().then(messages => {
+    await db.collection("messages").find().toArray().then(messages => {
 		for (let value of messages){listMessages.push(value)}});
     if (listMessages.length <= limit){
+
         response.send(listMessages);
-        console.log("passou pelo get de mensagens");;
     }
     else {
         let newList = [];
@@ -115,42 +110,33 @@ server.get('/messages',(request,response) => {
         }
         response.send(newList);
     }
-}); // ok
+});
 
-server.post('/status',(request,response) => {
-    const activeUser = request.query.User;
-    const user = db.collection("users").findOne({name:activeUser});
+server.post('/status', async (request,response) => {
+    const activeUser = request.headers.user;
+    const user = await db.collection("users").findOne({name:activeUser});
     if (!user) {
         response.status(404).send();
     } else{
-        db.collection("users").updateOne({name:activeUser},{ $set: {lastStatus: Date.now()} });
+        await db.collection("users").updateOne({name:activeUser},{ $set: {lastStatus: Date.now()} });
         response.status(201).send();
     }
 }); 
 
 
-//setInterval(deleteUnactive,10000);
+setInterval(deleteUnactive,10000);
 
 function deleteUnactive(){
     const currentTime = Date.now();
     const listUsers = [];
     db.collection("users").find().toArray().then(users => {
-        for (let value of users){listUsers.push(value)}
-    });
-    for (let i of listUsers){
-        if (i.lastStatus +10 < currentTime){
-            db.collection("users").deleteOne({name:i.name});
-        }
+        for (let value of users){
+            if (value.lastStatus+15 < currentTime){
+                db.collection("users").deleteOne({name:value.name});
+                db.collection("messages").insertOne({from: value.name, to: 'Todos', text: 'sai da sala...', type: 'status', time: 'HH:MM:SS'});
+            }
     }
+    });
 }
 
-server.get('/teste',(request,response) => {
-    response.send("teste");
-});
-
 server.listen(5000);
-
-
-/*correções:
-substituir as buscas em listas por findOne
-*/
