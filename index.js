@@ -19,12 +19,15 @@ mongoClient.connect().then(() => {
 
 
 server.post('/participants',(request,response) => {
+    
     const userSchema = joi.object({
         name: joi.string().required(),
     });
 
-    const validate = userSchema.validate(request.body);
-    if (validate){
+    const valid= userSchema.validate(request.body);
+    console.log(valid);
+    if (!valid.error){
+        console.log("ok");
         const user = request.body.name;
 
         let teste = true;
@@ -37,24 +40,27 @@ server.post('/participants',(request,response) => {
         });
         if (teste){
             db.collection("users").insertOne({name:user,lastStatus: Date.now()});
-            db.collection("messages").insertOne({from: user, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format(LTS)});
-            response.sendStatus(201);
+            db.collection("messages").insertOne({from: user, to: 'Todos', text: 'entra na sala...', type: 'status', time: dayjs().format('LTS')});
+            response.status(201).send();
         } else{
-            response.sendStatus(409);
+            response.status(409).send();
+            
         }
     }else {
-        response.sendStatus(422);
+        response.status(422).send();
+        console.log("erro!");
     }
 
     
-});
+}); //ta ok
 
 server.get('/participants',(request,response) => {
     db.collection("users").find().toArray().then(users => {
 		response.send(users)});
-});
+}); //ta ok
 
 server.post('/messages',(request,response) => {
+    
     const userSchema = joi.object({
         to: joi.string().required(),
         text: joi.string().required(),
@@ -77,15 +83,17 @@ server.post('/messages',(request,response) => {
             }
         });
 
-    if (validate && testeType && testeUser){
+    if (!validate.error && testeType && testeUser){
         const from = request.query.User;
         const to = request.body.to;
         const text = request.body.text;
         const type = request.body.type;
         db.collection("messages").insertOne({from, to, text, type, time: dayjs().format(LTS)});
-        response.sendStatus(201);
+        response.status(201).send();
+        console.log("mensagem adicionada")
     } else{
-        response.sendStatus(422)();
+        response.status(422).send();
+        console.log('erro aqui');
     }    
     
 });
@@ -97,6 +105,7 @@ server.get('/messages',(request,response) => {
 		for (let value of messages){listMessages.push(value)}});
     if (listMessages.length <= limit){
         response.send(listMessages);
+        console.log("passou pelo get de mensagens");;
     }
     else {
         let newList = [];
@@ -106,21 +115,21 @@ server.get('/messages',(request,response) => {
         }
         response.send(newList);
     }
-});
+}); // ok
 
 server.post('/status',(request,response) => {
     const activeUser = request.query.User;
     const user = db.collection("users").findOne({name:activeUser});
     if (!user) {
-        response.sendStatus(404);
+        response.status(404).send();
     } else{
         db.collection("users").updateOne({name:activeUser},{ $set: {lastStatus: Date.now()} });
-        response.sendStatus(201);
+        response.status(201).send();
     }
 }); 
 
 
-setInterval(deleteUnactive,10000);
+//setInterval(deleteUnactive,10000);
 
 function deleteUnactive(){
     const currentTime = Date.now();
@@ -135,9 +144,9 @@ function deleteUnactive(){
     }
 }
 
-/*server.get('/teste',(request,response) => {
+server.get('/teste',(request,response) => {
     response.send("teste");
-});*/
+});
 
 server.listen(5000);
 
